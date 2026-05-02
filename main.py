@@ -102,3 +102,67 @@ def analyze_chat_final(file_path, start_filter=None, end_filter=None):
         print("Datei nicht gefunden.")
 
 
+def check_occurrence(file_path, search_terms, start_filter=None, end_filter=None):
+    # Gleiches Pattern wie in deiner Hauptmethode
+    pattern = re.compile(r'^(\d{1,2}/\d{1,2}/\d{2,4},\s\d{2}:\d{2})\s-\s([^:]+):\s(.+)$')
+
+    # Ergebnisse pro Person: { Name: {'total_count': 0, 'msg_with_term': 0} }
+    results = defaultdict(lambda: {'total_count': 0, 'msg_with_term': 0})
+
+    if start_filter is None: start_filter = datetime.min
+    if end_filter is None: end_filter = datetime.max
+
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            for line in file:
+                match = pattern.match(line.strip())
+                if match:
+                    ts_str, sender, msg = match.groups()
+                    try:
+                        ts = datetime.strptime(ts_str, '%m/%d/%y, %H:%M')
+                    except ValueError:
+                        ts = datetime.strptime(ts_str, '%m/%d/%Y, %H:%M')
+
+                    # Filter anwenden
+                    if start_filter <= ts <= end_filter:
+                        s_name = sender.strip()
+                        # Case-insensitive Suche für Wörter (alles in Kleinbuchstaben)
+                        # Bei Emojis spielt das keine Rolle
+                        msg_lower = msg.lower()
+                        term_found_in_this_msg = False
+
+                        for search_term in search_terms:
+                            search_lower = search_term.lower()
+                            if search_lower in msg_lower:
+                                # 1. Wie oft insgesamt in dieser Nachricht?
+                                count_in_msg = msg_lower.count(search_lower)
+                                results[s_name]['total_count'] += count_in_msg
+
+                                # 2. Diese Nachricht enthielt den Begriff mindestens einmal
+                                term_found_in_this_msg = True
+                        if term_found_in_this_msg:
+                            results[s_name]['msg_with_term'] += 1
+
+        # Ausgabe der Ergebnisse
+        print("=" * 60)
+        print(f"ANALYSE FÜR: '{", ".join(search_terms)}'")
+        print(f"Zeitraum: {start_filter.date()} bis {end_filter.date()}")
+        print("=" * 60)
+
+        if not results:
+            print("Keine Treffer gefunden.")
+            return
+
+        for name, data in results.items():
+            print(f"Name: {name}")
+            print(f"  > Insgesamt vorkommen:      {data['total_count']} mal")
+            print(f"  > Nachrichten mit Begriff:  {data['msg_with_term']}")
+            # Durchschnittliche Anzahl pro Nachricht, wenn er vorkam
+            avg = data['total_count'] / data['msg_with_term']
+            print(f"  > Ø Intensität pro Nachricht: {avg:.2f}")
+            print("-" * 30)
+
+    except FileNotFoundError:
+        print("Datei nicht gefunden.")
+
+
