@@ -30,6 +30,17 @@ def get_formatted_data(file_path):
                     match = msg_pattern.match(line_str)
                     if match:
                         ts_str, sender, msg = match.groups()
+
+                        omitted_patterns = ["<Media omitted>", "<Video note omitted>", "<Sticker omitted>",
+                                            "<Audio omitted>", "View once voice message omitted",
+                                            "This message was deleted", "You deleted this message",]
+                        if any(p in msg for p in omitted_patterns):
+                            current_msg = None
+                            continue
+
+
+                        clean_msg = msg.replace("<This message was edited>", "").strip()
+
                         try:
                             ts = datetime.strptime(ts_str, '%m/%d/%y, %H:%M')
                         except ValueError:
@@ -38,7 +49,7 @@ def get_formatted_data(file_path):
                         current_msg = {
                             'ts': ts,
                             'sender': sender.strip(),
-                            'msg': msg.strip(),
+                            'msg': clean_msg,
                             'hour': ts.hour
                         }
                     # If it has a date but no match (e.g. system message),
@@ -47,7 +58,9 @@ def get_formatted_data(file_path):
                 # Line does not begin with a date -> Multiline
                 else:
                     if current_msg:
-                        current_msg['msg'] += " " + line_str
+                        clean_fragment = line_str.replace("<This message was edited>", "").strip()
+                        if clean_fragment:
+                            current_msg['msg'] += " " + clean_fragment
 
             # Save last message after loop
             if current_msg:
