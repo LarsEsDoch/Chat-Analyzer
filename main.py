@@ -80,6 +80,77 @@ def get_formatted_data(file_path):
     return data
 
 
+def analyze_vocabulary(file_path, start_filter=None, end_filter=None):
+    all_data = get_formatted_data(file_path)
+
+    start = start_filter if start_filter else datetime.min
+    end = end_filter if end_filter else datetime.max
+    data = [m for m in all_data if start <= m['ts'] <= end]
+
+    if not data:
+        print("Keine Nachrichten für die Wortschatz-Analyse gefunden.")
+        return
+
+    # 1. Recognizes letter repetition (eee, fff)
+    flood_pattern = re.compile(r'(.)\1{2,}')
+
+    # 2. Detects syllable repetition (hihihi, looolooo)
+    syllable_pattern = re.compile(r'(\w{2,3})\1{2,}')
+
+    vocab_stats = defaultdict(lambda: {
+        'all_words_list': [],
+        'unique_words_set': set(),
+        'word_lengths': Counter()
+    })
+
+    for m in data:
+        s_name = m['sender']
+        words = re.findall(r'\b[a-zA-ZäöüÄÖÜß]+\b', m['msg'].lower())
+
+        for w in words:
+            # Filter check
+            is_flood = flood_pattern.search(w)
+            is_syllable_spam = syllable_pattern.search(w)
+
+            if not is_flood and not is_syllable_spam and len(w) < 100:
+                vocab_stats[s_name]['all_words_list'].append(w)
+                vocab_stats[s_name]['unique_words_set'].add(w)
+                vocab_stats[s_name]['word_lengths'][len(w)] += 1
+
+    print("=" * 60)
+    print(f"WORTSCHATZ-ANALYSE")
+    print("=" * 60)
+
+    for name, s in vocab_stats.items():
+        total_count = len(s['all_words_list'])
+        unique_count = len(s['unique_words_set'])
+
+        # Type-Token-Ratio (TTR)
+        ttr = (unique_count / total_count * 100) if total_count > 0 else 0
+
+        # Average word length (letters per word)
+        avg_word_len = sum(k * v for k, v in s['word_lengths'].items()) / total_count if total_count > 0 else 0
+
+        longest_words = sorted(list(s['unique_words_set']), key=len, reverse=True)[:5]
+
+        print(f"Name: {name}")
+        print(f"  > Benutzte Wörter insgesamt: {total_count}")
+        print(f"  > Einzigartige Wörter:       {unique_count}")
+        print(f"  > Wortschatz-Vielfalt (TTR): {ttr:.2f}%")
+        print(f"  > Ø Buchstaben pro Wort:     {avg_word_len:.2f}")
+        print(f"  > Längste Wörter:            {', '.join(longest_words)}")
+
+        # Small distribution of word lengths
+        print(f"  > Wortlängen-Profil:")
+        for length in range(1, 11):  # Show distribution for 1 to 10 letters
+            count = s['word_lengths'][length]
+            perc = (count / total_count * 100) if total_count > 0 else 0
+            bar = "█" * int(perc / 2)
+            print(f"    {length:>2} Bst.: {perc:>5.1f}% {bar}")
+
+        print("-" * 40)
+
+
 def analyze_chat(file_path, start_filter=None, end_filter=None):
     all_data = get_formatted_data(file_path)
 
@@ -226,5 +297,7 @@ def check_occurrence(file_path, search_terms, start_filter=None, end_filter=None
 # Example:
 # analyze_chat('input/chat.txt', start_filter=datetime(2023, 4, 23), end_filter=datetime(2025, 1, 1))
 # check_occurrence('input/chat.txt', ["Hey", "Hi", "Hello"], start_filter=datetime(2024, 6, 7))
+analyze_vocabulary('input/chat.txt')
 analyze_chat('input/chat.txt')
-#check_occurrence('input/chat.txt', ["Ich liebe dich", "Ich hab dich lieb"])
+check_occurrence('input/chat.txt', ["Was machst du"])
+#check_occurrence('input/chat.txt', ["this"])
