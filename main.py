@@ -430,7 +430,7 @@ def analyze_emojis(file_path, start_filter=None, end_filter=None):
         print("-" * 40)
 
 
-def check_occurrence(file_path, search_terms, start_filter=None, end_filter=None):
+def check_occurrence(file_path, search_terms, start_filter=None, end_filter=None, output_occurence=False):
     all_data = get_formatted_data(file_path)
 
     start = start_filter if start_filter else datetime.min
@@ -453,6 +453,7 @@ def check_occurrence(file_path, search_terms, start_filter=None, end_filter=None
 
             if found_in_msg:
                 results[s_name]['msg_with_term'] += 1
+                if output_occurence: print(m['sender'] + ": " + m['msg'])
 
     # --- Output ---
     print("=" * 60)
