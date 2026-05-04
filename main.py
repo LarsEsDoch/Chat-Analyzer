@@ -181,6 +181,97 @@ def analyze_vocabulary(file_path, start_filter=None, end_filter=None):
         print(f"Beispiele: {', '.join(sorted(core_vocabulary, key=len, reverse=True)[:10])}")
 
 
+def analyze_linguistic_style(file_path, start_filter=None, end_filter=None):
+    all_data = get_formatted_data(file_path)
+
+    start = start_filter if start_filter else datetime.min
+    end = end_filter if end_filter else datetime.max
+    data = [m for m in all_data if start <= m['ts'] <= end]
+
+    if not data: return
+
+    # --- Dictionaries ---
+    dict_slang = {'cringe', 'sus', 'digga', 'bro', 'wild', 'slay', 'safe', 'lol', 'lmao', 'fr', 'legit', 'nope'}
+    dict_denglisch = {'nice', 'weird', 'crazy', 'random', 'match', 'vibes', 'feeling', 'awkward', 'literally', 'fyi',
+                      'asap', 'sad', 'happy', 'cute'}
+    dict_educated = {'demnach', 'infolgedessen', 'paradox', 'aspekt', 'faktisch', 'evident', 'hypothetisch', 'kontext',
+                     'diskurs', 'essenziell', 'fundiert', 'prinzipiell', 'spezifisch', 'relevanz'}
+    dict_support = {'stolz', 'super', 'toll', 'perfekt', 'gut', 'schaffst', 'glaub', 'schön', 'klasse', 'unterstütz',
+                    'stark', 'bester', 'beste'}
+    dict_self = {'ich', 'mein', 'meine', 'meins', 'mir', 'mich'}
+    dict_other = {'du', 'dein', 'deine', 'dir', 'dich'}
+
+    # Regex for questions
+    question_pattern = re.compile(
+        r'\b(was|wie|wo|warum|weshalb|wieso|wer|wann|hast du|weißt du|kannst du|darfst du|soll ich)\b', re.IGNORECASE)
+
+    style_stats = defaultdict(lambda: {
+        'total_words': 0,
+        'complex_words': 0,
+        'slang_hits': 0,
+        'denglisch_hits': 0,
+        'educated_hits': 0,
+        'support_hits': 0,
+        'self_hits': 0,
+        'other_hits': 0,
+        'questions_asked': 0
+    })
+
+    for m in data:
+        s_name = m['sender']
+        msg_text = m['msg'].lower()
+        words = re.findall(r'\b[a-zäöüß]+\b', msg_text)
+
+        style_stats[s_name]['total_words'] += len(words)
+
+        # Check für Fragen (entweder durch Fragezeichen ODER durch Fragestruktur)
+        if '?' in m['msg'] or question_pattern.search(msg_text):
+            style_stats[s_name]['questions_asked'] += 1
+
+        for w in words:
+            if len(w) >= 10: style_stats[s_name]['complex_words'] += 1
+            if w in dict_slang: style_stats[s_name]['slang_hits'] += 1
+            if w in dict_denglisch: style_stats[s_name]['denglisch_hits'] += 1
+            if w in dict_educated: style_stats[s_name]['educated_hits'] += 1
+            if w in dict_support: style_stats[s_name]['support_hits'] += 1
+            if w in dict_self: style_stats[s_name]['self_hits'] += 1
+            if w in dict_other: style_stats[s_name]['other_hits'] += 1
+            if w in dict_denglisch: print(w)
+
+    # --- AUSGABE ---
+    print("=" * 60)
+    print("LINGUISTISCHES & PSYCHOLOGISCHES PROFIL")
+    print("=" * 60)
+
+    for name, s in style_stats.items():
+        tw = s['total_words'] if s['total_words'] > 0 else 1  # Division by Zero Schutz
+        msg_count = sum(1 for m in data if m['sender'] == name)
+
+        # Wir berechnen "Vorkommen pro 10.000 Wörter", das macht seltene Dinge vergleichbar
+        rate = lambda x: (x / tw) * 10000
+
+        print(f"Name: {name}")
+
+        print(f"\n  [ Sprach-Stil (Treffer pro 10.000 Wörter) ]")
+        print(f"  > Slang/Jugendsprache: {rate(s['slang_hits']):.1f}")
+        print(f"  > Denglisch:           {rate(s['denglisch_hits']):.1f}")
+        print(f"  > Gehobene Sprache:    {rate(s['educated_hits']):.1f}")
+        print(f"  > Komplexität (>9 Bst):{(s['complex_words'] / tw * 100):.1f}% aller Wörter")
+
+        print(f"\n  [ Beziehungs-Dynamik ]")
+        # Ego-Fokus Ratio (Ich vs Du)
+        ego_ratio = s['self_hits'] / s['other_hits'] if s['other_hits'] > 0 else 0
+        focus = "Selbst-Fokus" if ego_ratio > 1.2 else "Du-Fokus" if ego_ratio < 0.8 else "Ausgeglichen"
+
+        print(f"  > Ich-Bezug:           {s['self_hits']} mal ('ich', 'mein'...)")
+        print(f"  > Du-Bezug:            {s['other_hits']} mal ('du', 'dein'...)")
+        print(f"  > Fokus-Index:         {ego_ratio:.2f} ({focus})")
+        print(f"  > Support/Lob-Wörter:  {rate(s['support_hits']):.1f} (pro 10k Wörter)")
+
+        print(f"\n  [ Gesprächsführung ]")
+        q_rate = (s['questions_asked'] / msg_count * 100) if msg_count > 0 else 0
+        print(f"  > Fragen gestellt:     {s['questions_asked']} ({q_rate:.1f}% aller Nachrichten)")
+        print("-" * 40)
 def analyze_chat(file_path, start_filter=None, end_filter=None):
     all_data = get_formatted_data(file_path)
 
