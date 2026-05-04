@@ -3,10 +3,27 @@ from collections import Counter, defaultdict
 from datetime import datetime
 import emoji
 import spacy
-from scipy.stats import linregress
-import math
+import torch
+import os
+import sys
+from tqdm import tqdm
+from wordlists import denglisch, youth_language, educated_language, supporting_words, self_reference_words, external_reference_words
 
-nlp = spacy.load("de_core_news_sm", disable=["parser", "ner"])
+msvc_bin_dir = r"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64"
+
+if msvc_bin_dir not in os.environ["PATH"]:
+    os.environ["PATH"] = msvc_bin_dir + os.pathsep + os.environ["PATH"]
+
+import spacy
+import torch
+
+print(f"CUDA verfügbar: {torch.cuda.is_available()}")
+print(f"Grafikkarte: {torch.cuda.get_device_name(0)}")
+
+if spacy.prefer_gpu():
+    print("GPU-Beschleunigung aktiv!")
+
+nlp = spacy.load("de_dep_news_trf")
 
 STOP_WORDS = {
     'und', 'zu', 'dem', 'der', 'die', 'das', 'ist', 'ja', 'nein', 'ich', 'du', 'wir', 'ihr', 'sie',
@@ -206,9 +223,6 @@ def analyze_linguistic_style(file_path, start_filter=None, end_filter=None):
     dict_self = {'ich', 'mein', 'meine', 'meins', 'mir', 'mich'}
     dict_other = {'du', 'dein', 'deine', 'dir', 'dich'}
 
-    # Regex for questions
-    question_pattern = re.compile(
-        r'\b(was|wie|wo|warum|weshalb|wieso|wer|wann|hast du|weißt du|kannst du|darfst du|soll ich)\b', re.IGNORECASE)
 
     style_stats = defaultdict(lambda: {
         'total_words': 0,
@@ -223,14 +237,24 @@ def analyze_linguistic_style(file_path, start_filter=None, end_filter=None):
     })
 
     for m in data:
+    # --- spaCy: Question recognition ---
+    all_msgs_cleaned = [m['msg'][:1000] for m in data]
+    results = []
+
+    for doc in tqdm(nlp.pipe(all_msgs_cleaned, batch_size=128), total=len(all_msgs_cleaned), desc="Analyse"):
+        has_question_mark = "?" in doc.text
+        is_structural_question = len(doc) > 0 and (
+            doc[0].pos_ in ["PRON", "VERB", "AUX"] or
+            any("Int" in t.morph.get("PronType") for t in doc)
+        )
+        results.append(has_question_mark or is_structural_question)
         s_name = m['sender']
         msg_text = m['msg'].lower()
         words = re.findall(r'\b[a-zäöüß]+\b', msg_text)
 
         style_stats[s_name]['total_words'] += len(words)
 
-        # Check für Fragen (entweder durch Fragezeichen ODER durch Fragestruktur)
-        if '?' in m['msg'] or question_pattern.search(msg_text):
+        if results[i]:
             style_stats[s_name]['questions_asked'] += 1
 
         for w in words:
