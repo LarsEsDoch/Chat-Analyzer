@@ -150,6 +150,36 @@ def analyze_vocabulary(file_path, start_filter=None, end_filter=None):
 
         print("-" * 40)
 
+    senders = list(vocab_stats.keys())
+    if len(senders) >= 2:
+        user1, user2 = senders[0], senders[1]
+        set1 = vocab_stats[user1]['unique_words_set']
+        set2 = vocab_stats[user2]['unique_words_set']
+
+        # Words that both use
+        common_vocabulary = set1.intersection(set2)
+        common_count = len(common_vocabulary)
+
+        total_unique_combined = len(set1.union(set2))
+
+        # Jaccard-Coefficient
+        similarity = (common_count / total_unique_combined * 100) if total_unique_combined > 0 else 0
+
+        user1_counts = Counter(vocab_stats[user1]['all_words_list'])
+        user2_counts = Counter(vocab_stats[user2]['all_words_list'])
+        core_vocabulary = [
+            w for w in common_vocabulary
+            if user1_counts[w] >= 5 and user2_counts[w] >= 5 and w not in STOP_WORDS
+        ]
+
+        print("=" * 60)
+        print(f"WORTSCHATZ-ÜBERSCHNEIDUNG")
+        print("=" * 60)
+        print(f"Gemeinsame Wörter: {common_count}")
+        print(f"Ähnlichkeits-Index: {similarity:.2f}%")
+        print(f"Echter Kern-Wortschatz: {len(core_vocabulary)}")
+        print(f"Beispiele: {', '.join(sorted(core_vocabulary, key=len, reverse=True)[:10])}")
+
 
 def analyze_chat(file_path, start_filter=None, end_filter=None):
     all_data = get_formatted_data(file_path)
