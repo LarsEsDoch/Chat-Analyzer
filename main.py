@@ -402,7 +402,6 @@ def analyze_chat(file_path, start_filter=None, end_filter=None):
         words = re.findall(r'\b\w+\b', msg_text.lower())
         filtered_words = [w for w in words if w not in STOP_WORDS and len(w) > 2]
         stats[s_name]['common_words'].update(filtered_words)
-        stats[s_name]['total_words'] += len(words)
 
         weekday_names = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
         day_name = weekday_names[curr['ts'].weekday()]
@@ -418,7 +417,7 @@ def analyze_chat(file_path, start_filter=None, end_filter=None):
             slot = "Nacht (23-06)"
         stats[s_name]['time_slots'][slot] += 1
 
-        found_emojis = [c for c in msg_text if emoji.is_emoji(c)]
+        found_emojis = [e['emoji'] for e in emoji.emoji_list(msg_text)]
         stats[s_name]['emojis'].update(found_emojis)
 
         if s_name == last_sender:
@@ -426,7 +425,7 @@ def analyze_chat(file_path, start_filter=None, end_filter=None):
         else:
             stats[last_sender]['bursts'].append(current_burst)
             diff = (curr['ts'] - wait_start_ts).total_seconds() / 60
-            if diff < 240:
+            if 1 < diff < 240 :
                 stats[s_name]['responses'].append(diff)
                 #print(s_name + ", " + str(diff) + ": " + msg_text)
             else:
@@ -491,7 +490,7 @@ def analyze_emojis(file_path, start_filter=None, end_filter=None):
     for m in data:
         s_name = m['sender']
         # Extract all emojis from the message
-        found = [c for c in m['msg'] if emoji.is_emoji(c)]
+        found = [e['emoji'] for e in emoji.emoji_list(m['msg'])]
 
         if found:
             emoji_stats[s_name]['total_emojis'] += len(found)
