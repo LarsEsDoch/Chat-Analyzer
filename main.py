@@ -102,6 +102,18 @@ def get_formatted_data(file_path):
     return data
 
 
+def _split_list(lst):
+    words = set()
+    phrases = []
+    for entry in lst:
+        e = entry.lower().strip()
+        if ' ' in e:
+            phrases.append(e)
+        else:
+            words.add(e)
+    return words, phrases
+
+
 def analyze_vocabulary(file_path, start_filter=None, end_filter=None):
     all_data = get_formatted_data(file_path)
 
@@ -210,19 +222,16 @@ def analyze_linguistic_style(file_path, start_filter=None, end_filter=None):
     end = end_filter if end_filter else datetime.max
     data = [m for m in all_data if start <= m['ts'] <= end]
 
-    if not data: return
+    if not data:
+        return
 
-    # --- Dictionaries ---
-    dict_slang = {'cringe', 'sus', 'digga', 'bro', 'wild', 'slay', 'safe', 'lol', 'lmao', 'fr', 'legit', 'nope'}
-    dict_denglisch = {'nice', 'weird', 'crazy', 'random', 'match', 'vibes', 'feeling', 'awkward', 'literally', 'fyi',
-                      'asap', 'sad', 'happy', 'cute'}
-    dict_educated = {'demnach', 'infolgedessen', 'paradox', 'aspekt', 'faktisch', 'evident', 'hypothetisch', 'kontext',
-                     'diskurs', 'essenziell', 'fundiert', 'prinzipiell', 'spezifisch', 'relevanz'}
-    dict_support = {'stolz', 'super', 'toll', 'perfekt', 'gut', 'schaffst', 'glaub', 'schön', 'klasse', 'unterstütz',
-                    'stark', 'bester', 'beste'}
-    dict_self = {'ich', 'mein', 'meine', 'meins', 'mir', 'mich'}
-    dict_other = {'du', 'dein', 'deine', 'dir', 'dich'}
-
+    # --- Prepare word_lists ---
+    slang_words,     slang_phrases     = _split_list(youth_language)
+    denglisch_words, denglisch_phrases = _split_list(denglisch)
+    educated_words,  educated_phrases  = _split_list(educated_language)
+    support_words,   support_phrases   = _split_list(supporting_words)
+    self_words,      self_phrases      = _split_list(self_reference_words)
+    other_words,     other_phrases     = _split_list(external_reference_words)
 
     style_stats = defaultdict(lambda: {
         'total_words': 0,
@@ -236,7 +245,6 @@ def analyze_linguistic_style(file_path, start_filter=None, end_filter=None):
         'questions_asked': 0
     })
 
-    for m in data:
     # --- spaCy: Question recognition ---
     all_msgs_cleaned = [m['msg'][:1000] for m in data]
     results = []
@@ -248,6 +256,9 @@ def analyze_linguistic_style(file_path, start_filter=None, end_filter=None):
             any("Int" in t.morph.get("PronType") for t in doc)
         )
         results.append(has_question_mark or is_structural_question)
+
+    # --- Language Analyzation ---
+    for i, m in enumerate(data):
         s_name = m['sender']
         msg_text = m['msg'].lower()
         words = re.findall(r'\b[a-zäöüß]+\b', msg_text)
@@ -257,17 +268,32 @@ def analyze_linguistic_style(file_path, start_filter=None, end_filter=None):
         if results[i]:
             style_stats[s_name]['questions_asked'] += 1
 
+        # Word matching
         for w in words:
-            if len(w) >= 10: style_stats[s_name]['complex_words'] += 1
-            if w in dict_slang: style_stats[s_name]['slang_hits'] += 1
-            if w in dict_denglisch: style_stats[s_name]['denglisch_hits'] += 1
-            if w in dict_educated: style_stats[s_name]['educated_hits'] += 1
-            if w in dict_support: style_stats[s_name]['support_hits'] += 1
-            if w in dict_self: style_stats[s_name]['self_hits'] += 1
-            if w in dict_other: style_stats[s_name]['other_hits'] += 1
-            if w in dict_denglisch: print(w)
+            if len(w) >= 10:           style_stats[s_name]['complex_words'] += 1
+            if w in slang_words:       style_stats[s_name]['slang_hits'] += 1
+            if w in denglisch_words:   style_stats[s_name]['denglisch_hits'] += 1
+            if w in educated_words:    style_stats[s_name]['educated_hits'] += 1
+            if w in support_words:     style_stats[s_name]['support_hits'] += 1
+            if w in self_words:        style_stats[s_name]['self_hits'] += 1
+            if w in other_words:       style_stats[s_name]['other_hits'] += 1
+            if w in educated_words:    print(w)
 
-    # --- AUSGABE ---
+        # Phrase matching
+        for p in slang_phrases:
+            if p in msg_text: style_stats[s_name]['slang_hits'] += 1
+        for p in denglisch_phrases:
+            if p in msg_text: style_stats[s_name]['denglisch_hits'] += 1
+        for p in educated_phrases:
+            if p in msg_text: style_stats[s_name]['educated_hits'] += 1
+        for p in support_phrases:
+            if p in msg_text: style_stats[s_name]['support_hits'] += 1
+        for p in self_phrases:
+            if p in msg_text: style_stats[s_name]['self_hits'] += 1
+        for p in other_phrases:
+            if p in msg_text: style_stats[s_name]['other_hits'] += 1
+
+    # --- Output ---
     print("=" * 60)
     print("LINGUISTISCHES & PSYCHOLOGISCHES PROFIL")
     print("=" * 60)
