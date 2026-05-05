@@ -44,12 +44,20 @@ def get_formatted_data(file_path):
                     if match:
                         ts_str, sender, msg = match.groups()
 
-                        omitted_patterns = ["<Media omitted>", "<Video note omitted>", "<Sticker omitted>",
-                                            "<Audio omitted>", "View once voice message omitted",
-                                            "This message was deleted", "You deleted this message",]
-                        if any(p in msg for p in omitted_patterns):
+                        media_patterns = [
+                            "<Media omitted>", "<Video note omitted>", "<Sticker omitted>",
+                            "<Audio omitted>", "View once voice message omitted"
+                        ]
+
+                        deleted_patterns = [
+                            "This message was deleted", "You deleted this message"
+                        ]
+
+                        if any(p in msg for p in deleted_patterns):
                             current_msg = None
                             continue
+
+                        is_media = any(p in msg for p in media_patterns)
 
 
                         clean_msg = msg.replace("<This message was edited>", "").strip()
@@ -63,7 +71,8 @@ def get_formatted_data(file_path):
                             'ts': ts,
                             'sender': sender.strip(),
                             'msg': clean_msg,
-                            'hour': ts.hour
+                            'hour': ts.hour,
+                            'is_media': is_media
                         }
                     # If it has a date but no match (e.g. system message),
                     # current_msg remains None and the line is ignored.
@@ -117,13 +126,17 @@ class ChatAnalyzer:
             self._nlp.max_length = 5_000_000
         return self._nlp
 
-    def _filter(self, start_filter=None, end_filter=None):
+    def _filter(self, start_filter=None, end_filter=None, include_media=False):
         start = start_filter if start_filter else datetime.min
         end = end_filter if end_filter else datetime.max
-        return [m for m in self.data if start <= m['ts'] <= end]
+        return [
+            m for m in self.data
+            if start <= m['ts'] <= end
+               and (include_media or not m['is_media'])
+        ]
 
     def analyze_chat(self, start_filter=None, end_filter=None):
-        data = self._filter(start_filter, end_filter)
+        data = self._filter(start_filter, end_filter, True)
         if not data:
             print("Keine Nachrichten im Zeitraum gefunden.")
             return
@@ -131,7 +144,7 @@ class ChatAnalyzer:
         # --- Statistics ---
         stats = defaultdict(lambda: {
             'msg_count': 0, 'total_words': 0, 'responses': [], 'time_slots': Counter(),
-            'emojis': Counter(), 'bursts': [], 'weekdays': Counter(), 'common_words': Counter()
+            'emojis': Counter(), 'bursts': [], 'weekdays': Counter(), 'common_words': Counter(), 'text_msg_count': 0
         })
 
         current_burst = 0
@@ -142,15 +155,20 @@ class ChatAnalyzer:
         for i, curr in enumerate(data):
             s_name = curr['sender']
             msg_text = curr['msg']
-
-            words_in_this_msg = len(re.findall(r'\b\w+\b', msg_text))
+            is_media = curr['is_media']
 
             stats[s_name]['msg_count'] += 1
-            stats[s_name]['total_words'] += len(msg_text.split())
 
-            words = re.findall(r'\b\w+\b', msg_text.lower())
-            filtered_words = [w for w in words if w not in STOP_WORDS and len(w) > 2]
-            stats[s_name]['common_words'].update(filtered_words)
+            if not is_media:
+                stats[s_name]['text_msg_count'] += 1
+                stats[s_name]['total_words'] += len(msg_text.split())
+
+                words = re.findall(r'\b\w+\b', msg_text.lower())
+                filtered_words = [w for w in words if w not in STOP_WORDS and len(w) > 2]
+                stats[s_name]['common_words'].update(filtered_words)
+
+                found_emojis = [e['emoji'] for e in emoji.emoji_list(msg_text)]
+                stats[s_name]['emojis'].update(found_emojis)
 
             weekday_names = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
             day_name = weekday_names[curr['ts'].weekday()]
@@ -165,9 +183,6 @@ class ChatAnalyzer:
             else:
                 slot = "Nacht (23-06)"
             stats[s_name]['time_slots'][slot] += 1
-
-            found_emojis = [e['emoji'] for e in emoji.emoji_list(msg_text)]
-            stats[s_name]['emojis'].update(found_emojis)
 
             if s_name == last_sender:
                 current_burst += 1
@@ -197,7 +212,7 @@ class ChatAnalyzer:
                 speaking_time = (s['msg_count'] / total_messages_chat) * 100
             else:
                 speaking_time = 0
-            avg_msg_length = s['total_words'] / s['msg_count'] if s['msg_count'] > 0 else 0
+            avg_msg_length = s['total_words'] / s['text_msg_count'] if s['text_msg_count'] > 0 else 0
             avg_resp = sum(s['responses']) / len(s['responses']) if s['responses'] else 0
             avg_burst = sum(s['bursts']) / len(s['bursts']) if s['bursts'] else 1
             top_emojis = "".join([e for e, count in s['emojis'].most_common(5)])
