@@ -299,7 +299,6 @@ def analyze_linguistic_style(file_path, start_filter=None, end_filter=None):
             if w in support_words:     style_stats[s_name]['support_hits'] += 1
             if w in self_words:        style_stats[s_name]['self_hits'] += 1
             if w in other_words:       style_stats[s_name]['other_hits'] += 1
-            if w in educated_words:    print(w)
 
         # Phrase matching
         for p in slang_phrases:
@@ -369,7 +368,7 @@ def advanced_vocabulary_model(file_path):
         lemmas_all = []
 
         # Apply nlp.pipe directly to the list of messages
-        for doc in nlp.pipe(msgs, batch_size=500, n_process=-1):  # n_process=-1 -> Use all cpu cores
+        for doc in nlp.pipe(msgs, batch_size=500):  # IF cpu usage: n_process=-1 -> Use all cpu cores
             for token in doc:
                 if token.is_alpha and not token.is_stop:
                     lemmas_all.append(token.lemma_.lower())
@@ -558,7 +557,6 @@ def analyze_emojis(file_path, start_filter=None, end_filter=None):
     print("=" * 60)
 
     for name, s in emoji_stats.items():
-        msg_count = next((m_cnt['msg_count'] for n, m_cnt in defaultdict(int).items() if n == name), 1)
         actual_msg_count = sum(1 for m in data if m['sender'] == name)
 
         emoji_ratio = (s['total_emojis'] / actual_msg_count) if actual_msg_count > 0 else 0
@@ -582,7 +580,7 @@ def analyze_emojis(file_path, start_filter=None, end_filter=None):
         print("-" * 40)
 
 
-def check_occurrence(file_path, search_terms, start_filter=None, end_filter=None, output_occurence=False):
+def check_occurrence(file_path, search_terms, start_filter=None, end_filter=None, output_occurrence=False):
     all_data = get_formatted_data(file_path)
 
     start = start_filter if start_filter else datetime.min
@@ -605,7 +603,7 @@ def check_occurrence(file_path, search_terms, start_filter=None, end_filter=None
 
             if found_in_msg:
                 results[s_name]['msg_with_term'] += 1
-                if output_occurence: print(m['sender'] + ": " + m['msg'])
+                if output_occurrence: print(m['sender'] + ": " + m['msg'])
 
     # --- Output ---
     print("=" * 60)
@@ -632,8 +630,16 @@ def check_occurrence(file_path, search_terms, start_filter=None, end_filter=None
 # Example:
 # analyze_chat('input/chat.txt', start_filter=datetime(2023, 4, 23), end_filter=datetime(2025, 1, 1))
 # check_occurrence('input/chat.txt', ["Hey", "Hi", "Hello"], start_filter=datetime(2024, 6, 7))
-analyze_vocabulary('input/chat.txt')
-analyze_chat('input/chat.txt')
-analyze_emojis('input/chat.txt')
-check_occurrence('input/chat.txt', ["Was machst du"])
-#check_occurrence('input/chat.txt', ["this"])
+
+if __name__ == '__main__':
+    file_path = 'input/chat.txt'
+
+    #analyze_vocabulary(file_path)
+    analyze_linguistic_style(file_path, start_filter=datetime(2026, 4, 10))
+    #advanced_vocabulary_model(file_path)
+    #analyze_chat(file_path)
+    #analyze_chat(file_path, start_filter=datetime(2026, 2, 10))
+    #analyze_emojis(file_path)
+    #check_occurrence(file_path, ["Nachti", "Gute Nacht", "Gut Nacht"], output_occurrence=True)
+    #check_occurrence(file_path, ["Jaa"])
+
