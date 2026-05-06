@@ -122,94 +122,117 @@ def analyze_vocabulary(file_path, start_filter=None, end_filter=None):
         print("Keine Nachrichten für die Wortschatz-Analyse gefunden.")
         return
 
-    # 1. Recognizes letter repetition (eee, fff)
-    flood_pattern = re.compile(r'(.)\1{2,}')
-
-    # 2. Detects syllable repetition (hihihi, looolooo)
+    flood_pattern    = re.compile(r'(.)\1{2,}')
     syllable_pattern = re.compile(r'(\w{2,3})\1{2,}')
 
     vocab_stats = defaultdict(lambda: {
-        'all_words_list': [],
-        'unique_words_set': set(),
-        'word_lengths': Counter()
+        # Token level (without spaCy)
+        'all_words':     [],
+        'unique_words':  set(),
+        'word_lengths':  Counter(),
+        # Lemma level (spaCy)
+        'lemma_counts':  Counter(),
+        'recent_lemmas': set(),
     })
 
+    msgs_per_sender = defaultdict(list)
+    for m in data:
+        msgs_per_sender[m['sender']].append(m['msg'])
+
+    # --- Token stats (no spaCy needed) ---
     for m in data:
         s_name = m['sender']
         words = re.findall(r'\b[a-zA-ZäöüÄÖÜß]+\b', m['msg'].lower())
-
         for w in words:
-            # Filter check
-            is_flood = flood_pattern.search(w)
-            is_syllable_spam = syllable_pattern.search(w)
-
-            if not is_flood and not is_syllable_spam and len(w) < 100:
-                vocab_stats[s_name]['all_words_list'].append(w)
-                vocab_stats[s_name]['unique_words_set'].add(w)
+            if not flood_pattern.search(w) and not syllable_pattern.search(w) and len(w) < 100:
+                vocab_stats[s_name]['all_words'].append(w)
+                vocab_stats[s_name]['unique_words'].add(w)
                 vocab_stats[s_name]['word_lengths'][len(w)] += 1
 
+    # --- Lemma stats (one spaCy run per sender) ---
+    nlp.max_length = 5_000_000
+    for s_name, msgs in msgs_per_sender.items():
+        recent_msgs = msgs[max(0, int(len(msgs) * 0.9)):]
+
+        msgs_cleaned = [m[:1000] for m in msgs]
+        recent_msgs_cleaned = [m[:1000] for m in recent_msgs]
+
+        for doc in tqdm(nlp.pipe(msgs_cleaned, batch_size=256), total=len(msgs_cleaned), desc=f"Lemmata {s_name}"):
+            for token in doc:
+                if token.is_alpha and not token.is_stop:
+                    vocab_stats[s_name]['lemma_counts'][token.lemma_.lower()] += 1
+
+        for doc in nlp.pipe(recent_msgs_cleaned, batch_size=128):
+            for token in doc:
+                if token.is_alpha:
+                    vocab_stats[s_name]['recent_lemmas'].add(token.lemma_.lower())
+
+    # --- Output per person ---
     print("=" * 60)
-    print(f"WORTSCHATZ-ANALYSE")
+    print("WORTSCHATZ-ANALYSE")
     print("=" * 60)
 
     for name, s in vocab_stats.items():
-        total_count = len(s['all_words_list'])
-        unique_count = len(s['unique_words_set'])
+        total_tokens  = len(s['all_words'])
+        unique_tokens = len(s['unique_words'])
+        ttr           = (unique_tokens / total_tokens * 100) if total_tokens > 0 else 0
+        avg_len       = sum(k * v for k, v in s['word_lengths'].items()) / total_tokens if total_tokens > 0 else 0
 
-        # Type-Token-Ratio (TTR)
-        ttr = (unique_count / total_count * 100) if total_count > 0 else 0
+        lemma_counts  = s['lemma_counts']
+        unique_lemmas = len(lemma_counts)
+        total_lemmas  = sum(lemma_counts.values())
+        active_vocab  = [l for l, c in lemma_counts.items() if c >= 5]
+        retention     = (len(set(lemma_counts) & s['recent_lemmas']) / unique_lemmas * 100) if unique_lemmas > 0 else 0
 
-        # Average word length (letters per word)
-        avg_word_len = sum(k * v for k, v in s['word_lengths'].items()) / total_count if total_count > 0 else 0
+        # Heaps' Law: V = K * N^β  (K≈44, β≈0.67 for German)
+        estimated_total = int(44 * (total_lemmas ** 0.67)) if total_lemmas > 0 else 0
 
-        longest_words = sorted(list(s['unique_words_set']), key=len, reverse=True)[:5]
+        longest = sorted(s['unique_words'], key=len, reverse=True)[:5]
+        top_lemmas = lemma_counts.most_common(5)
 
         print(f"Name: {name}")
-        print(f"  > Benutzte Wörter insgesamt: {total_count}")
-        print(f"  > Einzigartige Wörter:       {unique_count}")
-        print(f"  > Wortschatz-Vielfalt (TTR): {ttr:.2f}%")
-        print(f"  > Ø Buchstaben pro Wort:     {avg_word_len:.2f}")
-        print(f"  > Längste Wörter:            {', '.join(longest_words)}")
 
-        # Small distribution of word lengths
+        print(f"\n  [ Token-Ebene ]")
+        print(f"  > Wörter gesamt:         {total_tokens}")
+        print(f"  > Einzigartige Wörter:   {unique_tokens}")
+        print(f"  > Wortschatz-Vielfalt:   {ttr:.2f}% TTR")
+        print(f"  > Ø Buchstaben/Wort:     {avg_len:.2f}")
+        print(f"  > Längste Wörter:        {', '.join(longest)}")
         print(f"  > Wortlängen-Profil:")
-        for length in range(1, 11):  # Show distribution for 1 to 10 letters
+        for length in range(1, 11):
             count = s['word_lengths'][length]
-            perc = (count / total_count * 100) if total_count > 0 else 0
-            bar = "█" * int(perc / 2)
+            perc  = (count / total_tokens * 100) if total_tokens > 0 else 0
+            bar   = "█" * int(perc / 2)
             print(f"    {length:>2} Bst.: {perc:>5.1f}% {bar}")
 
+        print(f"\n  [ Lemma-Ebene (spaCy) ]")
+        print(f"  > Einzigartige Grundformen:  {unique_lemmas}")
+        print(f"  > Aktiver Wortschatz (≥5x):  {len(active_vocab)}")
+        print(f"  > Wortschatz-Erhalt (10%):   {retention:.1f}%")
+        print(f"  > Geschätzter Gesamtbesitz:  ~{estimated_total} Wörter")
+        print(f"  > Top Grundformen:           {', '.join(f'{l} ({c}x)' for l, c in top_lemmas)}")
         print("-" * 40)
 
+    # --- Overlap analysis (only for 2 people) ---
     senders = list(vocab_stats.keys())
     if len(senders) >= 2:
-        user1, user2 = senders[0], senders[1]
-        set1 = vocab_stats[user1]['unique_words_set']
-        set2 = vocab_stats[user2]['unique_words_set']
+        u1, u2   = senders[0], senders[1]
+        set1     = vocab_stats[u1]['unique_words']
+        set2     = vocab_stats[u2]['unique_words']
+        common   = set1 & set2
+        jaccard  = len(common) / len(set1 | set2) * 100 if set1 | set2 else 0
 
-        # Words that both use
-        common_vocabulary = set1.intersection(set2)
-        common_count = len(common_vocabulary)
-
-        total_unique_combined = len(set1.union(set2))
-
-        # Jaccard-Coefficient
-        similarity = (common_count / total_unique_combined * 100) if total_unique_combined > 0 else 0
-
-        user1_counts = Counter(vocab_stats[user1]['all_words_list'])
-        user2_counts = Counter(vocab_stats[user2]['all_words_list'])
-        core_vocabulary = [
-            w for w in common_vocabulary
-            if user1_counts[w] >= 5 and user2_counts[w] >= 5 and w not in STOP_WORDS
-        ]
+        cnt1 = Counter(vocab_stats[u1]['all_words'])
+        cnt2 = Counter(vocab_stats[u2]['all_words'])
+        core = [w for w in common if cnt1[w] >= 5 and cnt2[w] >= 5 and w not in STOP_WORDS]
 
         print("=" * 60)
-        print(f"WORTSCHATZ-ÜBERSCHNEIDUNG")
+        print("WORTSCHATZ-ÜBERSCHNEIDUNG")
         print("=" * 60)
-        print(f"Gemeinsame Wörter: {common_count}")
-        print(f"Ähnlichkeits-Index: {similarity:.2f}%")
-        print(f"Echter Kern-Wortschatz: {len(core_vocabulary)}")
-        print(f"Beispiele: {', '.join(sorted(core_vocabulary, key=len, reverse=True)[:10])}")
+        print(f"  > Gemeinsame Wörter:    {len(common)}")
+        print(f"  > Ähnlichkeits-Index:   {jaccard:.2f}% (Jaccard)")
+        print(f"  > Kern-Wortschatz:      {len(core)} Wörter (beide ≥5x)")
+        print(f"  > Beispiele:            {', '.join(sorted(core, key=len, reverse=True)[:10])}")
 
 
 def analyze_linguistic_style(file_path, start_filter=None, end_filter=None):
@@ -288,7 +311,7 @@ def analyze_linguistic_style(file_path, start_filter=None, end_filter=None):
             #print("Question:     " + m['msg'])
         else:
             #print("No Question:" + " " * 60 + m['msg'])
-        pass
+            pass
 
         # Word matching
         for w in words:
@@ -345,70 +368,6 @@ def analyze_linguistic_style(file_path, start_filter=None, end_filter=None):
         q_rate = (s['questions_asked'] / msg_count * 100) if msg_count > 0 else 0
         print(f"  > Fragen-Quote:        {q_rate:.1f}% aller Nachrichten")
         print("-" * 50)
-
-
-def advanced_vocabulary_model(file_path):
-    all_data = get_formatted_data(file_path)
-
-    # Grouping of message texts per person
-    messages_per_person = defaultdict(list)
-    for m in all_data:
-        messages_per_person[m['sender']].append(m['msg'])
-
-    # Increase the limit if a single post is very long
-    nlp.max_length = 5000000
-
-    print("=" * 60)
-    print("ERWEITERTE LINGUISTISCHE ANALYSE (LEMMATA & PROGNOSE)")
-    print("=" * 60)
-
-    for name, msgs in messages_per_person.items():
-        print(f"Verarbeite Daten für {name}...")
-
-        lemmas_all = []
-
-        # Apply nlp.pipe directly to the list of messages
-        for doc in nlp.pipe(msgs, batch_size=500):  # IF cpu usage: n_process=-1 -> Use all cpu cores
-            for token in doc:
-                if token.is_alpha and not token.is_stop:
-                    lemmas_all.append(token.lemma_.lower())
-
-        total_lemmas = len(lemmas_all)
-        lemma_counts = Counter(lemmas_all)
-        unique_lemmas = len(lemma_counts)
-
-        # --- Active vocabulary (threshold >= 5) ---
-        active_vocab = [l for l, count in lemma_counts.items() if count >= 5]
-        active_count = len(active_vocab)
-
-        # --- Vocabulary retention (The last 10% of news) ---
-        recent_count = max(1, int(len(msgs) * 0.1))
-        recent_msgs = msgs[-recent_count:]
-
-        recent_lemmas = set()
-        for doc in nlp.pipe(recent_msgs, batch_size=200):
-            for token in doc:
-                if token.is_alpha:
-                    recent_lemmas.add(token.lemma_.lower())
-
-        preserved_count = len(set(lemma_counts.keys()).intersection(recent_lemmas))
-        retention_rate = (preserved_count / unique_lemmas * 100) if unique_lemmas > 0 else 0
-
-        # --- Estimated total vocabulary (Heaps' Law Approximation) ---
-        # The beta value for German is often around 0.7, the K value varies.
-        estimated_total = int(unique_lemmas * (total_lemmas ** 0.15))
-
-        print(f"Ergebnisse für {name}:")
-        print(f"  > Lemmata insgesamt (Tokens): {total_lemmas}")
-        print(f"  > Einzigartige Lemmata:       {unique_lemmas}")
-        print(f"  > Aktiver Wortschatz (f>=5): {active_count} Grundformen")
-        print(f"  > Wortschatz-Erhalt (Recent): {retention_rate:.1f}%")
-        print(f"  > Geschätzter Gesamt-Besitz:  ~{estimated_total} Wörter")
-
-        top_active = sorted([(l, c) for l, c in lemma_counts.items()],
-                            key=lambda x: x[1], reverse=True)[:5]
-        print(f"  > Top Grundformen: {', '.join([f'{l} ({c}x)' for l, c in top_active])}")
-        print("-" * 40)
 
 
 def analyze_chat(file_path, start_filter=None, end_filter=None):
@@ -634,8 +593,8 @@ def check_occurrence(file_path, search_terms, start_filter=None, end_filter=None
 if __name__ == '__main__':
     file_path = 'input/chat.txt'
 
-    #analyze_vocabulary(file_path)
-    analyze_linguistic_style(file_path, start_filter=datetime(2026, 4, 10))
+    analyze_vocabulary(file_path)
+    #analyze_linguistic_style(file_path, start_filter=datetime(2026, 4, 10))
     #advanced_vocabulary_model(file_path)
     #analyze_chat(file_path)
     #analyze_chat(file_path, start_filter=datetime(2026, 2, 10))
