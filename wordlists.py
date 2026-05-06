@@ -5728,7 +5728,7 @@ educated_language = [
 # CATEGORY 4: SUPPORTING WORDS (1346 ENTRIES)
 # ============================================================
 
-supporting_words = [
+supporting_language = [
     "ja",
     "genau",
     "richtig",
@@ -7081,7 +7081,7 @@ supporting_words = [
 # CATEGORY 5: WORDS THAT REFLECT ON THEMSELVES (1147 ENTRIES)
 # ============================================================
 
-self_reference_words = [
+selfish_language = [
     "ich",
     "mich",
     "mir",
@@ -8235,7 +8235,7 @@ self_reference_words = [
 # CATEGORY 6: WORDS THAT RESPONSIVE TO THE OTHER (639)
 # ============================================================
 
-external_reference_words = [
+other_language = [
     "du",
     "dich",
     "dir",
@@ -8883,9 +8883,9 @@ all_lists = {
     "denglisch": denglisch,
     "youth_language": youth_language,
     "educated_language": educated_language,
-    "supporting_words": supporting_words,
-    "self_reference_words": self_reference_words,
-    "external_reference_words": external_reference_words,
+    "supporting_words": supporting_language,
+    "self_reference_words": selfish_language,
+    "external_reference_words": other_language,
 }
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ from datetime import datetime
 import emoji
 import os
 from tqdm import tqdm
-from wordlists import denglisch, youth_language, educated_language, supporting_words, self_reference_words, external_reference_words
+from wordlists import denglisch, youth_language, educated_language, supporting_language, selfish_language, other_language
 import spacy
 import torch
 
