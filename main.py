@@ -145,7 +145,7 @@ class ChatAnalyzer:
         stats = defaultdict(lambda: {
             'msg_count': 0, 'total_words': 0, 'responses': [], 'time_slots': Counter(),
             'emojis': Counter(), 'bursts': [], 'weekdays': Counter(), 'common_words': Counter(),
-            'text_msg_count': 0, 'number_count': 0
+            'text_msg_count': 0, 'number_count': 0, 'media_count': 0
         })
 
         current_burst = 0
@@ -171,6 +171,8 @@ class ChatAnalyzer:
 
                 found_emojis = [e['emoji'] for e in emoji.emoji_list(msg_text)]
                 stats[s_name]['emojis'].update(found_emojis)
+            else:
+                stats[s_name]['media_count'] += 1
 
             weekday_names = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
             day_name = weekday_names[curr['ts'].weekday()]
@@ -228,6 +230,7 @@ class ChatAnalyzer:
             print(f"  > Ø Antwortzeit: {avg_resp:.1f} Min.")
             print(f"  > Ø Wortanzahl: {avg_msg_length:.1f} Wörter pro Nachricht")
             print(f"  > Benutze Zahlen: {s['number_count']}")
+            print(f"  > Medien verschickt: {s['media_count']}")
             print(f"  > Top Wörter:  {top_words if top_words else 'Keine'}")
             print(f"  > Top Emojis: {top_emojis if top_emojis else 'Keine'}")
             print(f"  > Zeitliche Verteilung:")
