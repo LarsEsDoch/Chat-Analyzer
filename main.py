@@ -106,6 +106,18 @@ def _split_list(lst):
     return words, phrases
 
 
+def _mattr(words, window=500):
+    if len(words) < window:
+        return len(set(words)) / len(words) * 100 if words else 0
+
+    ttrs = []
+    for i in range(len(words) - window + 1):
+        chunk = words[i:i + window]
+        ttrs.append(len(set(chunk)) / window)
+
+    return (sum(ttrs) / len(ttrs)) * 100
+
+
 class ChatAnalyzer:
     def __init__(self, file_path):
         self.file_path = file_path
@@ -305,7 +317,7 @@ class ChatAnalyzer:
         for name, s in vocab_stats.items():
             total_tokens = len(s['all_words'])
             unique_tokens = len(s['unique_words'])
-            ttr = (unique_tokens / total_tokens * 100) if total_tokens > 0 else 0
+            mattr = _mattr(s['all_words'])
             avg_len = sum(k * v for k, v in s['word_lengths'].items()) / total_tokens if total_tokens > 0 else 0
 
             lemma_counts = s['lemma_counts']
@@ -325,7 +337,7 @@ class ChatAnalyzer:
             print(f"\n  [ Token-Ebene ]")
             print(f"  > Wörter gesamt:         {total_tokens}")
             print(f"  > Einzigartige Wörter:   {unique_tokens}")
-            print(f"  > Wortschatz-Vielfalt:   {ttr:.2f}% TTR")
+            print(f"  > Wortschatz-Vielfalt:   {mattr:.2f}%")
             print(f"  > Ø Buchstaben/Wort:     {avg_len:.2f}")
             print(f"  > Längste Wörter:        {', '.join(longest)}")
             print(f"  > Wortlängen-Profil:")
@@ -653,35 +665,10 @@ if __name__ == '__main__':
 
     #chat.analyze_chat(start_filter=datetime(2026, 5,6), end_filter=datetime(2026, 5, 7))
 
-#TODO Add image voice message analyzer (how often)
+#TODO
 # veränderung der werte in monats schritten
 # diagramm der nachrichten
-# wer benutzt mehr zahlen
-
-#FRAGEN
-#Wie gut ist mein Code? Gibt es logische Fehler?
-#Sollte ich die Ignoranz von Medien wieder wegmachen (würde die Wörter- und Nachrichtenanalyse beeinflussen, aber dafür die Gesamtanzahl an Nachrichten  und die Zeit bis zur Antwort genauer machen)?
-#Sind die Werte, die ich per Spacy, Matheformeln und Analysen ermittle, realitätsnah?
-#Was sollte ich noch hinzufügen?
-
-#Medien-Nachrichten ignorieren
-#Ja, du solltest sie ignorieren – aber differenzierter. Aktuell ignorierst du sie komplett. Besser: Beim Parsen ein Flag setzen:
-#pythoncurrent_msg = {
-#    ...
-#    'is_media': any(p in msg for p in omitted_patterns)
-#}
-#Dann kannst du je nach Analyse entscheiden:
-#
-#analyze_chat → Medien mitzählen (genauere Nachrichtenanzahl & Antwortzeiten)
-#analyze_vocabulary / analyze_linguistic_style → Medien ausschließen
-
-#Antwortzeiten: Der 1 < diff < 240-Filter ist gut gemeint, aber 4 Stunden als Grenze ist willkürlich. Besser wäre es, das pro Tageszeit zu gewichten oder nur Nachrichten innerhalb derselben „Session" zu zählen.
-#Ego-Ratio: Der Selbst-/Fremdbezug ist methodisch sinnvoll, aber mit 639 Einträgen in external_reference_words wie vorhin besprochen unsicher.
-
-#Was noch hinzufügen?
-#Du hast selbst gute TODOs. Konkret umsetzbar wären:
-#
-#Monatliche Verlaufskurve – für msg_count, avg_response_time, question_rate. Zeigt Beziehungsdynamik über Zeit sehr deutlich.
-#Initiativ-Analyse – wer startet Gespräche (erste Nachricht nach >2h Pause)?
-#Stimmungs-Trend – kombiniere support_hits, self_hits, Emoji-Dichte zu einem einfachen Positivity-Score.
-#Medien-Zählung – wie viele Bilder/Voice Messages hat wer geschickt? Ist ein einfacher Counter beim Parsen.
+# Monatliche Verlaufskurve – für msg_count, avg_response_time, question_rate. Zeigt Beziehungsdynamik über Zeit sehr deutlich.
+# Stimmungs-Trend – kombiniere support_hits, self_hits, Emoji-Dichte zu einem einfachen Positivity-Score. Wer ist positiver?
+# Antwortzeiten: Der 1 < diff < 240-Filter ist gut gemeint, aber 4 Stunden als Grenze ist willkürlich. Besser wäre es, das pro Tageszeit zu gewichten oder nur Nachrichten innerhalb derselben „Session" zu zählen.
+# Ego-Ratio: Der Selbst-/Fremdbezug ist methodisch sinnvoll, aber mit 639 Einträgen in external_reference_words wie vorhin besprochen unsicher.
