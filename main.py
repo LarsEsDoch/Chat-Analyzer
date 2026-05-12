@@ -1,6 +1,6 @@
 import re
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 import emoji
 import os
 from tqdm import tqdm
@@ -157,7 +157,7 @@ class ChatAnalyzer:
         stats = defaultdict(lambda: {
             'msg_count': 0, 'total_words': 0, 'responses': [], 'time_slots': Counter(),
             'emojis': Counter(), 'bursts': [], 'weekdays': Counter(), 'common_words': Counter(),
-            'text_msg_count': 0, 'number_count': 0, 'media_count': 0
+            'text_msg_count': 0, 'number_count': 0, 'media_count': 0, 'active_days': set()
         })
 
         current_burst = 0
@@ -186,6 +186,7 @@ class ChatAnalyzer:
             else:
                 stats[s_name]['media_count'] += 1
 
+            stats[s_name]['active_days'].add(curr['ts'].date())
             weekday_names = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
             day_name = weekday_names[curr['ts'].weekday()]
             stats[s_name]['weekdays'][day_name] += 1
@@ -217,6 +218,8 @@ class ChatAnalyzer:
             last_ts = curr['ts']
 
         total_messages_chat = sum(s['msg_count'] for s in stats.values())
+        total_days = (data[-1]['ts'].date() - data[0]['ts'].date()).days + 1
+        total_days_set = {data[0]['ts'].date() + timedelta(days=x) for x in range(total_days)}
 
         # --- Output ---
         print("=" * 60)
@@ -228,6 +231,12 @@ class ChatAnalyzer:
                 speaking_time = (s['msg_count'] / total_messages_chat) * 100
             else:
                 speaking_time = 0
+
+            active_days = len(s['active_days'])
+            active_pct = active_days / total_days * 100
+            avg_per_day = s['msg_count'] / active_days if active_days > 0 else 0
+            missing_days = ", ".join(sorted([day.strftime('%d.%m.%Y') for day in (total_days_set - s['active_days'])]))
+
             avg_msg_length = s['total_words'] / s['text_msg_count'] if s['text_msg_count'] > 0 else 0
             avg_resp = sum(s['responses']) / len(s['responses']) if s['responses'] else 0
             avg_burst = sum(s['bursts']) / len(s['bursts']) if s['bursts'] else 1
@@ -238,6 +247,9 @@ class ChatAnalyzer:
             print(f"Name: {name}")
             print(f"  > Nachrichten: {s['msg_count']}")
             print(f"  > Redeanteil: {speaking_time:.1f}%")
+            print(f"  > Aktive Tage:    {active_days}/{total_days} ({active_pct:.1f}%)")
+            print(f"  > Ø Nachrichten/Tag: {avg_per_day:.1f}")
+            print(f"  > Ausgelassene Tage:  {missing_days}")
             print(f"  > Ø Nachrichten am Stück: {avg_burst:.1f}")
             print(f"  > Ø Antwortzeit: {avg_resp:.1f} Min.")
             print(f"  > Ø Wortanzahl: {avg_msg_length:.1f} Wörter pro Nachricht")
