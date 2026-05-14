@@ -20,6 +20,7 @@ STOP_WORDS = {
 
 
 def get_formatted_data(file_path):
+    print(f"Opening file '{file_path}'...")
     # Pattern for genuine messages (with colon)
     msg_pattern = re.compile(r'^(\d{1,2}/\d{1,2}/\d{2,4},\s\d{2}:\d{2})\s-\s([^:]+):\s(.+)$')
     # Pattern only for the beginning of the date (to distinguish system messages from multiline messages)
@@ -30,6 +31,7 @@ def get_formatted_data(file_path):
 
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
+            print("Read file successfully. Formatting now...")
             for line in file:
                 line_str = line.strip()
                 if not line_str: continue
@@ -91,8 +93,9 @@ def get_formatted_data(file_path):
                 data.append(current_msg)
 
     except FileNotFoundError:
-        print(f"Fehler: Die Datei '{file_path}' wurde nicht gefunden.")
+        print(f"Error: The file '{file_path}' could not be found.")
 
+    print("Formatting finished.")
     return data
 
 
@@ -157,10 +160,10 @@ class ChatAnalyzer:
 
             if msvc_bin_dir not in os.environ["PATH"]:
                 os.environ["PATH"] = msvc_bin_dir + os.pathsep + os.environ["PATH"]
-            print(f"CUDA verfügbar: {torch.cuda.is_available()}")
-            print(f"Grafikkarte: {torch.cuda.get_device_name(0)}")
+            print(f"CUDA available: {torch.cuda.is_available()}")
+            print(f"Graphics card: {torch.cuda.get_device_name(0)}")
             if spacy.prefer_gpu():
-                print("GPU-Beschleunigung aktiv!")
+                print("GPU-Accelartion activated!")
             self._nlp = spacy.load("de_dep_news_trf")
             self._nlp.max_length = 5_000_000
         return self._nlp
@@ -178,9 +181,10 @@ class ChatAnalyzer:
         with _redirect_output(output_file):
             data = self._filter(start_filter, end_filter, True)
             if not data:
-                print("Keine Nachrichten im Zeitraum gefunden.")
+                print("Could not find messages in that period.")
                 return
 
+            print("Starting analyzing...")
             # --- Statistics ---
             stats = defaultdict(lambda: {
                 'msg_count': 0, 'total_words': 0, 'responses': [], 'time_slots': Counter(),
@@ -215,18 +219,18 @@ class ChatAnalyzer:
                     stats[s_name]['media_count'] += 1
 
                 stats[s_name]['active_days'].add(curr['ts'].date())
-                weekday_names = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+                weekday_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
                 day_name = weekday_names[curr['ts'].weekday()]
                 stats[s_name]['weekdays'][day_name] += 1
 
                 if 6 <= curr['hour'] < 12:
-                    slot = "Morgen (06-12)"
+                    slot = "Morning (06-12)"
                 elif 12 <= curr['hour'] < 18:
-                    slot = "Mittag/Nachm. (12-18)"
+                    slot = "Afternoon (12-18)"
                 elif 18 <= curr['hour'] < 23:
-                    slot = "Abend (18-23)"
+                    slot = "Evening (18-23)"
                 else:
-                    slot = "Nacht (23-06)"
+                    slot = "Night (23-06)"
                 stats[s_name]['time_slots'][slot] += 1
 
                 if s_name == last_sender:
@@ -248,10 +252,11 @@ class ChatAnalyzer:
             total_messages_chat = sum(s['msg_count'] for s in stats.values())
             total_days = (data[-1]['ts'].date() - data[0]['ts'].date()).days + 1
             total_days_set = {data[0]['ts'].date() + timedelta(days=x) for x in range(total_days)}
+            print("Finished analyzing.")
 
             # --- Output ---
             print("=" * 60)
-            print(f"Chat Analyzer ({data[0]['ts'].date()} bis {data[-1]['ts'].date()})")
+            print(f"Chat Analyzer ({data[0]['ts'].date()} to {data[-1]['ts'].date()})")
             print("=" * 60)
 
             for name, s in stats.items():
@@ -273,24 +278,24 @@ class ChatAnalyzer:
                 top_words = ", ".join([f"{w} ({c}x)" for w, c in s['common_words'].most_common(10)])
 
                 print(f"Name: {name}")
-                print(f"  > Nachrichten: {s['msg_count']}")
-                print(f"  > Redeanteil: {speaking_time:.1f}%")
-                print(f"  > Aktive Tage:    {active_days}/{total_days} ({active_pct:.1f}%)")
-                print(f"  > Ø Nachrichten/Tag: {avg_per_day:.1f}")
-                print(f"  > Ausgelassene Tage:  {missing_days}")
-                print(f"  > Ø Nachrichten am Stück: {avg_burst:.1f}")
-                print(f"  > Ø Antwortzeit: {avg_resp:.1f} Min.")
-                print(f"  > Ø Wortanzahl: {avg_msg_length:.1f} Wörter pro Nachricht")
-                print(f"  > Benutze Zahlen: {s['number_count']}")
-                print(f"  > Medien verschickt: {s['media_count']}")
-                print(f"  > Top Wörter:  {top_words if top_words else 'Keine'}")
-                print(f"  > Top Emojis: {top_emojis if top_emojis else 'Keine'}")
-                print(f"  > Zeitliche Verteilung:")
+                print(f"  > Message count:     {s['msg_count']}")
+                print(f"  > Speaking share:    {speaking_time:.1f}%")
+                print(f"  > Active days:       {active_days}/{total_days} ({active_pct:.1f}%)")
+                print(f"  > Ø Messages/Day:    {avg_per_day:.1f}")
+                print(f"  > Missed days:       {missing_days}")
+                print(f"  > Ø Messages burst:  {avg_burst:.1f}")
+                print(f"  > Ø Response time:   {avg_resp:.1f} min.")
+                print(f"  > Ø Word count:      {avg_msg_length:.1f} wpm")
+                print(f"  > Used numbers:      {s['number_count']}")
+                print(f"  > Media shared:      {s['media_count']}")
+                print(f"  > Top words:         {top_words if top_words else 'None'}")
+                print(f"  > Top emojis:        {top_emojis if top_emojis else 'None'}")
+                print(f"  > Time distribution:")
                 for slot, count in sorted(s['time_slots'].items()):
                     perc = (count / s['msg_count']) * 100
-                    print(f"    - {slot:<18}: {perc:>5.1f}% ({count} Nachrichten)")
-                print(f"  > Aktivität nach Wochentag:")
-                weekday_order = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+                    print(f"    - {slot:<18}: {perc:>5.1f}% ({count} messages)")
+                print(f"  > Activity by weekday:")
+                weekday_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
                 for day in weekday_order:
                     count = s['weekdays'][day]
                     perc = (count / s['msg_count']) * 100 if s['msg_count'] > 0 else 0
@@ -302,9 +307,10 @@ class ChatAnalyzer:
             data = self._filter(start_filter, end_filter)
             nlp = self._get_nlp()
             if not data:
-                print("Keine Nachrichten für die Wortschatz-Analyse gefunden.")
+                print("Could not find messages in that period.")
                 return
 
+            print("Starting vocabulary analysis...")
             flood_pattern = re.compile(r'(.)\1{2,}')
             syllable_pattern = re.compile(r'(\w{2,3})\1{2,}')
 
@@ -332,6 +338,8 @@ class ChatAnalyzer:
                         vocab_stats[s_name]['unique_words'].add(w)
                         vocab_stats[s_name]['word_lengths'][len(w)] += 1
 
+            print("Finished simple vocabulary analysis.")
+            print("Starting lemma analysis...")
             # --- Lemma stats (one spaCy run per sender) ---
             nlp.max_length = 5_000_000
             for s_name, msgs in msgs_per_sender.items():
@@ -349,10 +357,11 @@ class ChatAnalyzer:
                     for token in doc:
                         if token.is_alpha:
                             vocab_stats[s_name]['recent_lemmas'].add(token.lemma_.lower())
+            print("Finished lemma analysis.")
 
             # --- Output per person ---
             print("=" * 60)
-            print("WORTSCHATZ-ANALYSE")
+            print(f"Vocabulary Analysis ({data[0]['ts'].date()} to {data[-1]['ts'].date()})")
             print("=" * 60)
 
             for name, s in vocab_stats.items():
@@ -375,25 +384,23 @@ class ChatAnalyzer:
 
                 print(f"Name: {name}")
 
-                print(f"\n  [ Token-Ebene ]")
-                print(f"  > Wörter gesamt:         {total_tokens}")
-                print(f"  > Einzigartige Wörter:   {unique_tokens}")
-                print(f"  > Wortschatz-Vielfalt:   {mattr:.2f}%")
-                print(f"  > Ø Buchstaben/Wort:     {avg_len:.2f}")
-                print(f"  > Längste Wörter:        {', '.join(longest)}")
-                print(f"  > Wortlängen-Profil:")
+                print(f"  > Total words:            {total_tokens}")
+                print(f"  > Unique words:           {unique_tokens}")
+                print(f"  > Vocabulary diversity:   {mattr:.2f}%")
+                print(f"  > Ø Letters/Word:         {avg_len:.2f}")
+                print(f"  > Longest words:          {', '.join(longest)}")
+                print(f"  > Word length profile:")
                 for length in range(1, 11):
                     count = s['word_lengths'][length]
                     perc = (count / total_tokens * 100) if total_tokens > 0 else 0
                     bar = "█" * int(perc / 2)
-                    print(f"    {length:>2} Bst.: {perc:>5.1f}% {bar}")
+                    print(f"   {length:>2} Letters: {perc:>5.1f}% {bar}")
 
-                print(f"\n  [ Lemma-Ebene (spaCy) ]")
-                print(f"  > Einzigartige Grundformen:  {unique_lemmas}")
-                print(f"  > Aktiver Wortschatz (≥5x):  {len(active_vocab)}")
-                print(f"  > Wortschatz-Erhalt (10%):   {retention:.1f}%")
-                print(f"  > Geschätzter Gesamtbesitz:  ~{estimated_total} Wörter")
-                print(f"  > Top Grundformen:           {', '.join(f'{l} ({c}x)' for l, c in top_lemmas)}")
+                print(f"  > Unique lemmas:          {unique_lemmas}")
+                print(f"  > Active vocabulary:      {len(active_vocab)}")
+                print(f"  > Vocabulary retention:   {retention:.1f}%")
+                print(f"  > Estimated total:       ~{estimated_total} words")
+                print(f"  > Top lemmas:             {', '.join(f'{l} ({c}x)' for l, c in top_lemmas)}")
                 print("-" * 40)
 
             # --- Overlap analysis (only for 2 people) ---
@@ -407,23 +414,35 @@ class ChatAnalyzer:
 
                 cnt1 = Counter(vocab_stats[u1]['all_words'])
                 cnt2 = Counter(vocab_stats[u2]['all_words'])
-                core = [w for w in common if cnt1[w] >= 5 and cnt2[w] >= 5 and w not in STOP_WORDS]
+                core = sorted(
+                    [w for w in common if cnt1[w] >= 5 and cnt2[w] >= 5 and w not in STOP_WORDS],
+                    key=lambda w: cnt1[w] + cnt2[w],
+                    reverse=True
+                )
+
+                word_list = []
+                for n in range(2, 11):  # Längen 2, 3, 4, 5
+                    # Suche alle Wörter mit Länge n und nimm die ersten zwei
+                    matches = [w for w in core if len(w) == n][:2]
+                    word_list.extend(matches)
 
                 print("=" * 60)
-                print("WORTSCHATZ-ÜBERSCHNEIDUNG")
+                print("Vocabulary overlap")
                 print("=" * 60)
-                print(f"  > Gemeinsame Wörter:    {len(common)}")
-                print(f"  > Ähnlichkeits-Index:   {jaccard:.2f}% (Jaccard)")
-                print(f"  > Kern-Wortschatz:      {len(core)} Wörter (beide ≥5x)")
-                print(f"  > Beispiele:            {', '.join(sorted(core, key=len, reverse=True)[:10])}")
+                print(f"  > Shared words:           {len(common)}")
+                print(f"  > Similarity index:       {jaccard:.2f}%")
+                print(f"  > Core vocabulary:        {len(core)} words")
+                print(f"  > Examples:               {', '.join(word_list)}")
 
     def analyze_linguistic_style(self, start_filter=None, end_filter=None, output_file=None):
         with _redirect_output(output_file):
             data = self._filter(start_filter, end_filter)
             nlp = self._get_nlp()
             if not data:
-                print("Keine Nachrichten für die  linguistische Analyse gefunden.")
+                print("Could not find messages in that period.")
                 return
+
+            print("Starting linguistic style analysis...")
 
             # --- Prepare word_lists ---
             slang_words, slang_phrases = _split_list(youth_language)
@@ -446,6 +465,7 @@ class ChatAnalyzer:
             })
 
             # --- spaCy: Question recognition ---
+            print("Starting question recognition...")
             all_msgs_cleaned = [m['msg'][:1000] for m in data]
             results = []
 
@@ -478,6 +498,8 @@ class ChatAnalyzer:
                     has_oder_tag
                 )
 
+            print("Finished analyzing questions.")
+            print("Continue with language analysis...")
             # --- Language Analyzation ---
             for i, m in enumerate(data):
                 s_name = m['sender']
@@ -518,9 +540,11 @@ class ChatAnalyzer:
                 for p in other_phrases:
                     if p in msg_text: style_stats[s_name]['other_hits'] += 1
 
+            print("Finished analyzing linguistic style.")
+
             # --- Output ---
             print("=" * 60)
-            print("LINGUISTISCHES & PSYCHOLOGISCHES PROFIL")
+            print(f"Lingustic & Physiologic Profile ({data[0]['ts'].date()} to {data[-1]['ts'].date()})")
             print("=" * 60)
 
             for name, s in style_stats.items():
@@ -530,32 +554,34 @@ class ChatAnalyzer:
                 pct = lambda x: (x / tw) * 100
 
                 print(f"Name: {name}")
-                print(f"\n  [ Sprach-Stil (Anteil am Wortschatz) ]")
-                print(f"  > Slang/Jugendsprache: {pct(s['slang_hits']):.2f}%")
-                print(f"  > Denglisch:           {pct(s['denglisch_hits']):.2f}%")
-                print(f"  > Gehobene Sprache:    {pct(s['educated_hits']):.2f}%")
-                print(f"  > Komplexe Wörter:     {(s['complex_words'] / tw * 100):.1f}%")
+                print(f"\n  [ Linguistic Style (Vocabulary Share) ]")
+                print(f"  > Slang/Colloquialisms:   {pct(s['slang_hits']):.2f}%")
+                print(f"  > Anglicisms (Denglisch): {pct(s['denglisch_hits']):.2f}%")
+                print(f"  > Formal/Sophisticated:   {pct(s['educated_hits']):.2f}%")
+                print(f"  > Complex Vocabulary:     {(s['complex_words'] / tw * 100):.1f}%")
 
-                print(f"\n  [ Beziehungs-Dynamik ]")
+                print(f"\n  [ Relationship Dynamics ]")
                 ego_ratio = s['self_hits'] / s['other_hits'] if s['other_hits'] > 0 else 0
-                focus = "Selbst-Fokus" if ego_ratio > 1.2 else "Du-Fokus" if ego_ratio < 0.8 else "Ausgeglichen"
-                print(f"  > Ich-Bezug:           {pct(s['self_hits']):.2f}% aller Wörter")
-                print(f"  > Du-Bezug:            {pct(s['other_hits']):.2f}% aller Wörter")
-                print(f"  > Fokus-Index:         {ego_ratio:.2f} ({focus})")
-                print(f"  > Support/Lob-Wörter:  {pct(s['support_hits']):.2f}%")
+                focus = "Self-Focused" if ego_ratio > 1.2 else "You-Focused" if ego_ratio < 0.8 else "Balanced"
+                print(f"  > Self-Reference:         {pct(s['self_hits']):.2f}% of all words")
+                print(f"  > You-Reference:          {pct(s['other_hits']):.2f}% of all words")
+                print(f"  > Focus Index:            {ego_ratio:.2f} ({focus})")
+                print(f"  > Supportive words:       {pct(s['support_hits']):.2f}%")
 
-                print(f"\n  [ Gesprächsführung ]")
+                print(f"\n  [ Conversation Management ]")
 
                 q_rate = (s['questions_asked'] / msg_count * 100) if msg_count > 0 else 0
-                print(f"  > Fragen-Quote:        {q_rate:.1f}% aller Nachrichten")
+                print(f"  > Question Rate:          {q_rate:.1f}% of all messages")
                 print("-" * 50)
 
     def analyze_emojis(self, start_filter=None, end_filter=None, output_file=None):
         with _redirect_output(output_file):
             data = self._filter(start_filter, end_filter)
             if not data:
-                print("Keine Daten für Emoji-Analyse gefunden.")
+                print("Could not find messages in that period.")
                 return
+
+            print("Starting analyzing emojis...")
 
             emoji_stats = defaultdict(lambda: {
                 'total_emojis': 0,
@@ -578,8 +604,10 @@ class ChatAnalyzer:
                         combo = "".join(found[:3])
                         emoji_stats[s_name]['emoji_combos'][combo] += 1
 
+            print("Finished analyzing emojis.")
+
             print("=" * 60)
-            print(f"EMOJI-DIVERSITÄT & VIBE-CHECK")
+            print(f"Emoji Analysis ({data[0]['ts'].date()} to {data[-1]['ts'].date()})")
             print("=" * 60)
 
             for name, s in emoji_stats.items():
@@ -589,11 +617,11 @@ class ChatAnalyzer:
                 diversity = len(s['unique_emojis'])
 
                 print(f"Name: {name}")
-                print(f"  > Emojis insgesamt:   {s['total_emojis']}")
-                print(f"  > Emoji-Dichte:       {emoji_ratio:.2f} Emojis pro Nachricht")
-                print(f"  > Emojis-Diversität:  {diversity} verschiedene Symbole genutzt")
+                print(f"  > Total emojis:             {s['total_emojis']}")
+                print(f"  > Emoji density:            {emoji_ratio:.2f} emojis per message")
+                print(f"  > Emoji diversity:          {diversity} different emojis used")
 
-                print(f"  > Top 10 Emojis:")
+                print(f"  > Top 10 emojis:")
                 top_10 = s['unique_emojis'].most_common(10)
                 for emo, count in top_10:
                     perc = (count / s['total_emojis'] * 100) if s['total_emojis'] > 0 else 0
@@ -601,7 +629,7 @@ class ChatAnalyzer:
 
                 if s['emoji_combos']:
                     common_combos = ", ".join([f"{c}" for c, _ in s['emoji_combos'].most_common(3)])
-                    print(f"  > Typische Kombis:    {common_combos}")
+                    print(f"  > Typical combinations:  {common_combos}")
 
                 print("-" * 40)
 
@@ -610,8 +638,10 @@ class ChatAnalyzer:
         with _redirect_output(output_file):
             data = self._filter(start_filter, end_filter)
             if not data:
-                print("Keine Daten im gewählten Zeitraum gefunden.")
+                print("Could not find messages in that period.")
                 return
+
+            print("Starting searching occurrence...")
 
             excluded_terms = [t.lower() for t in (excluded_terms or [])]
             results = defaultdict(lambda: {
@@ -652,16 +682,18 @@ class ChatAnalyzer:
                         results[s_name]['hits_by_term'][term] += count
 
                     if output_occurrence:
-                        print(f"[TREFFER] {s_name}: {m['msg']}")
+                        print(f"[Hit] {s_name}: {m['msg']}")
+
+            print("Finished searching occurrence.")
 
             print("=" * 60)
-            print("ERWEITERTE TEXT-ANALYSE")
+            print("Advanced Term Searcher")
             print("=" * 60)
-            logic_str = " UND ".join([f"({'|'.join(g)})" for g in required_groups])
-            print(f"LOGIK: {logic_str[:60]:<60} ")
+            logic_str = " AND ".join([f"({'|'.join(g)})" for g in required_groups])
+            print(f"Logic: {logic_str[:60]:<60} ")
             if excluded_terms:
-                print(f"AUSSCHLUSS (NOT): {', '.join(excluded_terms)[:51]:<51}")
-            print(f"ZEITRAUM: {data[0]['ts'].date()} bis {data[-1]['ts'].date()}")
+                print(f"Exclusion (NOT): {', '.join(excluded_terms)[:51]:<51}")
+            print(f"Period: {data[0]['ts'].date()} to {data[-1]['ts'].date()}")
             print("=" * 60)
 
             sorted_senders = sorted(results.items(), key=lambda x: x[1]['msg_with_term'], reverse=True)
@@ -672,15 +704,15 @@ class ChatAnalyzer:
                 quota = (stats['msg_with_term'] / stats['total_msg_sender']) * 100
                 avg_intensity = stats['total_count'] / stats['msg_with_term']
 
-                print(f"👤 ANALYSE FÜR SENDER: {name.upper()}")
+                print(f"Analysis for {name.upper()}")
                 print(
-                    f"  ├─ Nachrichtenfokus: {stats['msg_with_term']} von {stats['total_msg_sender']} gesamt ({quota:.2f}%)")
-                print(f"  ├─ Trefferdichte:    {stats['total_count']} Wörter gesamt")
-                print(f"  ├─ Ø Intensität:     {avg_intensity:.2f} Begriffe pro Treffer-Nachricht")
+                    f"  ├─ Message Focus:    {stats['msg_with_term']} of {stats['total_msg_sender']} total ({quota:.2f}%)")
+                print(f"  ├─ Hit Density:      {stats['total_count']} words total")
+                print(f"  ├─ Avg Intensity:    {avg_intensity:.2f} terms per message")
 
                 top_words = sorted(stats['hits_by_term'].items(), key=lambda x: x[1], reverse=True)[:3]
                 word_str = ", ".join([f"{w} ({c}x)" for w, c in top_words])
-                print(f"  └─ Top-Begriffe:     {word_str}")
+                print(f"  └─ Top Terms:        {word_str}")
 
 
 # --- Calls ---
